@@ -54,6 +54,7 @@ xDim = 200e-9;  % Dimention of Si region in X direction (m)
 yDim = 100e-9;  % Dimention of Si region in Y direction (m)
 deltaT = 5e-15  % Time step value (s)
 lastPos = zeros(2,numElec); % Array to hold previous particle position
+color = hsv(10); % Set particle colours for plot
 
 
 % Initiate particle positions as array of random numbers within boundaries.
@@ -77,53 +78,183 @@ velocity = thermalVelocity.*velocity;
 temp = 300; % Si starting temperature (K) 
 time = 0;   % Initial time (s)
 
+% for T = 0:1000
+%     lastPos = position;
+%     sumVelocity = 0;
+%     % Advance all particles in direction of their velocity
+%     for c = 1:numElec
+%         position(1,c) = position(1,c) + (deltaT*velocity(1,c));
+%         position(2,c) = position(2,c) + (deltaT*velocity(2,c));
+%         
+%         % Particle behaviour if boundary is reached
+%         if position(2,c) <= 0 || position(2,c) >= yDim
+%             velocity(2,c) = (-1)*velocity(2,c);
+%         end
+%         if position(1,c) <= 0
+%             position(1,c) = xDim;
+%             lastPos(1,c) = xDim;
+%         elseif position(1,c) >= xDim
+%             position(1,c) = 0;
+%             lastPos(1,c) = 0;
+%         sumVelocity = sumVelocity + sqrt((velocity(1,c))^2+(velocity(2,c))^2);
+%     end
+% 
+%     % Plot new particle positions.
+%     figure(1)
+%     for c = 1:10
+%         plot([lastPos(1,c) position(1,c)],[lastPos(2,c) position(2,c)],'color', color(c,:))
+%         xlim([0 2e-7]);
+%         ylim([0 1e-7]);
+%         title('Figure 1: Random Motion of Electrons in Silicon')
+%         hold on
+%     end
+%     
+%     % Calculate average velocity (m/s)
+%     avgVelocity = sumVelocity/numElec;
+%     
+%     % Calculate and plot semiconductor temperature (K)
+%     prevTemp = temp;
+%     prevTime = time
+%     temp = (avgVelocity^2)*mn/(2*k);
+%     time = T*deltaT;
+%     
+%     figure(2)
+%     plot([prevTime time], [prevTemp temp], 'r')
+%     xlim([0 5e-12]);
+%     ylim([0 500]);
+%     title('Figure 2: Temperature of Silicon with Time')
+%     hold on
+%     
+% end
+
+%% 2  - Collisions with Mean Free Path'
+
+%% 2.1 - Maxwell-Boltzmann Distribution
+% Particles must have their initial velocities set randomly using the
+% Maxwell-Boltzmann distribution for velocity components. The equation to
+% acheive this is given by
+%
+% $$v_{i,\alpha}=\sqrt{kT/m_i}\times N(1,0)$$
+%
+%
+% where i is an integer reperesenting the specific particle, alpha is the
+% direction of the velocity component (X or Y), and N(1,0) reperesents a
+% normally distributed value with a mean of 0 and a variance of 1. The code below initializes an
+% array of velocities, and Figure 3 shows a histogram of velocity
+% distribution.
+
+% Create array of X and Y velocity components (m/s)
+maxBoltz = sqrt(k*T/mn).*randn(2,numElec);
+
+% Determine magnitude of each velocity
+velMag = zeros(1,numElec);
+sumVelocity = 0;
+for c = 1:numElec
+    velMag(c) = sqrt((maxBoltz(1,c))^2 + (maxBoltz(2,c))^2);
+    sumVelocity = sumVelocity + velMag(c);
+end
+
+% Plot histogram of velocity distribution
+figure(3)
+histogram(velMag,30)
+title('Figure 3: Histogram of particle velocities')
+
+% Validate average velocity is equal to the thermal velocity
+averageVelocity = sumVelocity/numElec
+thermalVelocity
+
+%% 2.2 - Electron Scattering
+% The scattering of electrons within the silicon can be modeled by
+% first determining the scattering probability using the equation shown
+% below.
+%
+% $$P_{scat}=1-e^{-dt/T_{mn}}$$
+%
+%
+% It is then possible to introduce a condition to the model whereby
+% particles experience scattering with a probability equal to that of the
+% scattering probability. Scattered particles are set to a new random
+% velocity according to the maxwell-Boltzmann distribution. The code below
+% shows this.
+
+% Scattering probability
+Pscat = 1 - exp(-(deltaT/Tmn));
+
+
+% Initiate particle positions as array of random numbers within boundaries.
+position = [xDim;yDim].*rand(2,numElec);
+
+% Initial variables
+temp = 300; % Si starting temperature (K) 
+time = 0;   % Initial time (s)
+numCollisions = 0; % Initial number of collisions occured
+
 for T = 0:1000
     lastPos = position;
     sumVelocity = 0;
-    % Advance all particles in direction of their velocity
+    
     for c = 1:numElec
-        position(1,c) = position(1,c) + (deltaT*velocity(1,c));
-        position(2,c) = position(2,c) + (deltaT*velocity(2,c));
+        
+        % Scattering condition
+        if rand()<Pscat
+        maxBoltz(1,c) = sqrt(k*T/mn).*randn;
+        maxBoltz(2,c) = sqrt(k*T/mn).*randn;
+        numCollisions = numCollisions + 1;
+        end
         
         % Particle behaviour if boundary is reached
         if position(2,c) <= 0 || position(2,c) >= yDim
-            velocity(2,c) = (-1)*velocity(2,c);
+            maxBoltz(2,c) = (-1)*maxBoltz(2,c);
         end
         if position(1,c) <= 0
             position(1,c) = xDim;
+            lastPos(1,c) = xDim;
         elseif position(1,c) >= xDim
             position(1,c) = 0;
+            lastPos(1,c) = 0;
         end
-        sumVelocity = sumVelocity + sqrt((velocity(1,c))^2+(velocity(2,c))^2);
+        
+        sumVelocity = sumVelocity + sqrt((maxBoltz(1,c))^2 + (maxBoltz(2,c))^2);
     end
+    
+    % Advance all particles in direction of their velocity
+        position = position + (deltaT*maxBoltz);
+        position = position + (deltaT*maxBoltz);
 
     % Plot new particle positions.
-    figure(1)
-    for c = 1:5
-        plot([lastPos(1,c) position(1,c)],[lastPos(2,c) position(2,c)],'g')
+    figure(4)
+    for c = 1:10
+        plot([lastPos(1,c) position(1,c)],[lastPos(2,c) position(2,c)], 'color', color(c,:))
         xlim([0 2e-7]);
         ylim([0 1e-7]);
-        title('Figure 1: Random Motion of Electrons in Silicon')
+        title('Figure 4: Scattering of Electrons in Silicon')
         hold on
     end
     
     % Calculate average velocity (m/s)
     avgVelocity = sumVelocity/numElec;
     
+ %% 2.3 - Temperature over Time
+ % Code showing how the emperature within the semiconductor changes with
+ % respect to time can be seen below, Figure 5 reperesents a plot of this
+ % data.
+    
     % Calculate and plot semiconductor temperature (K)
     prevTemp = temp;
-    prevTime = time
-    temp = (avgVelocity^2)*mn/(3*k);
+    prevTime = time;
+    temp = (avgVelocity^2)*mn/(2*k);
     time = T*deltaT;
     
-    figure(2)
+    figure(5)
     plot([prevTime time], [prevTemp temp], 'r')
     xlim([0 5e-12]);
     ylim([0 500]);
-    title('Figure 2: Temperature of Silison with Time')
+    title('Figure 5: Temperature of Silicon with Time')
     hold on
     
 end
+
+meanCollisionTime = time/(numCollisions/numElec)
 
 
 
